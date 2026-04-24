@@ -1,0 +1,350 @@
+@import url("https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap");
+
+:root {
+  --bg-deep: #081422;
+  --bg-soft: #102a44;
+  --card: rgba(12, 24, 40, 0.75);
+  --card-border: rgba(153, 204, 255, 0.24);
+  --text-main: #f0f7ff;
+  --text-sub: #acd2f2;
+  --accent: #15d1ff;
+  --accent-2: #ffb657;
+  --danger: #ff7f95;
+  --success: #5ce6a8;
+  --shadow: 0 20px 45px rgba(4, 12, 23, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Noto Sans SC", sans-serif;
+  color: var(--text-main);
+  background:
+    radial-gradient(circle at 15% 20%, rgba(22, 187, 255, 0.22), transparent 40%),
+    radial-gradient(circle at 82% 12%, rgba(255, 182, 87, 0.2), transparent 34%),
+    linear-gradient(140deg, var(--bg-deep), var(--bg-soft));
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+.app-shell {
+  width: min(1200px, 92vw);
+  margin: 28px auto 48px;
+  animation: rise-in 500ms ease;
+}
+
+.hero {
+  padding: 24px 28px;
+  border-radius: 22px;
+  background: linear-gradient(130deg, rgba(15, 44, 74, 0.88), rgba(24, 54, 64, 0.72));
+  box-shadow: var(--shadow);
+  border: 1px solid var(--card-border);
+}
+
+.hero-eyebrow {
+  margin: 0;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: var(--accent);
+  font-family: "Chakra Petch", sans-serif;
+}
+
+.hero h1 {
+  margin: 10px 0;
+  font-size: clamp(28px, 4.1vw, 44px);
+  line-height: 1.16;
+  font-family: "Chakra Petch", sans-serif;
+}
+
+.hero p {
+  margin: 0;
+  color: var(--text-sub);
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.tab-btn {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--text-main);
+  background: rgba(8, 28, 45, 0.78);
+  border-radius: 999px;
+  padding: 10px 18px;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.tab-btn:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+}
+
+.tab-btn-active {
+  border-color: transparent;
+  background: linear-gradient(100deg, var(--accent), #2ad3b7);
+  color: #03212f;
+  font-weight: 700;
+  box-shadow: 0 12px 30px rgba(21, 209, 255, 0.28);
+}
+
+.page-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.single-column {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.panel {
+  border-radius: 18px;
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+}
+
+.panel-glow {
+  position: relative;
+  overflow: hidden;
+}
+
+.panel-glow::after {
+  content: "";
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  right: -130px;
+  top: -150px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(21, 209, 255, 0.27), transparent 62%);
+  pointer-events: none;
+}
+
+.panel h2 {
+  margin: 0;
+  font-family: "Chakra Petch", sans-serif;
+}
+
+.panel h3 {
+  margin-top: 18px;
+  margin-bottom: 10px;
+}
+
+.panel-subtitle {
+  margin: 6px 0 14px;
+  color: var(--text-sub);
+  font-size: 14px;
+}
+
+.video-shell {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #04111f;
+  min-height: 260px;
+}
+
+.video-shell video {
+  width: 100%;
+  display: block;
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.btn {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--text-main);
+  background: rgba(11, 43, 70, 0.9);
+  border-radius: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  background: rgba(14, 56, 91, 0.95);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-accent {
+  border-color: transparent;
+  color: #1b1402;
+  background: linear-gradient(100deg, var(--accent-2), #ffd684);
+}
+
+.status-chip {
+  margin-top: 10px;
+  display: inline-flex;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(92, 230, 168, 0.16);
+  border: 1px solid rgba(92, 230, 168, 0.4);
+}
+
+.result-card {
+  margin-top: 12px;
+  border-radius: 12px;
+  background: rgba(8, 34, 53, 0.8);
+  border: 1px solid rgba(107, 182, 223, 0.35);
+  padding: 12px;
+}
+
+.result-card p {
+  margin: 7px 0;
+}
+
+.form-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.form-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-sub);
+}
+
+input,
+select {
+  width: 100%;
+  border: 1px solid rgba(172, 210, 242, 0.24);
+  border-radius: 10px;
+  background: rgba(3, 21, 35, 0.72);
+  color: var(--text-main);
+  padding: 10px;
+}
+
+input:focus,
+select:focus {
+  outline: 2px solid rgba(21, 209, 255, 0.35);
+  outline-offset: 0;
+}
+
+.error-text {
+  color: var(--danger);
+  margin: 10px 0 0;
+}
+
+.success-text {
+  color: var(--success);
+  margin: 10px 0 0;
+}
+
+.table-shell {
+  margin-top: 10px;
+  max-height: 280px;
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(172, 210, 242, 0.2);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid rgba(172, 210, 242, 0.16);
+}
+
+th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #0f243b;
+  font-size: 13px;
+  color: #d2ecff;
+}
+
+.bar-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 42px;
+  align-items: center;
+  gap: 10px;
+}
+
+.bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #15d1ff, #ffb657);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 960px) {
+  .page-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell {
+    width: min(100%, 94vw);
+    margin-top: 16px;
+  }
+
+  .hero {
+    padding: 18px;
+  }
+}

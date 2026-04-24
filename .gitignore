@@ -1,0 +1,17 @@
+# Python backend
+.venv/
+backend/__pycache__/
+backend/**/*.pyc
+backend/attendance.db
+
+# Python model weights
+backend/weights/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+.DS_Store
+Thumbs.db
