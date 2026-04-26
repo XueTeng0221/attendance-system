@@ -21,7 +21,7 @@ class EmotionAnalyzer:
             try:
                 return self._predict_with_model(face_bgr)
             except Exception:
-                # Fall back to heuristic pipeline when model inference fails.
+                # 模型推断失败自动回退到启发式
                 return self._predict_with_heuristic(face_bgr)
 
         return self._predict_with_heuristic(face_bgr)

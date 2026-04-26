@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     database_url: str = "sqlite:///./attendance.db"
 
-    # YOLOv11 and torch model paths
+    # 模型 Torch 权重路径
     face_detector_model: str = "weights/yolo11n-face.pt"
     emotion_model: str = "weights/emotion_cnn.pt"
 
@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     liveness_threshold: float = 0.52
     request_timeout_sec: int = 20
 
-    # Allow pipeline fallback when no model file is present
+    # 无权重自动回退
     allow_heuristic_fallback: bool = True
 
     cors_origins: list[str] = [

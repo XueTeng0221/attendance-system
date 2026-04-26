@@ -14,6 +14,10 @@ class TorchFaceEmbedder:
         self.projection = F.normalize(projection, dim=0)
 
     def extract(self, face_bgr: np.ndarray) -> torch.Tensor:
+        '''
+        从人脸提取特征向量。
+        shape 为 (1, embedding_dim)，对待提取的人脸灰度图像进行下采样后进行正则化。
+        '''
         gray = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2GRAY)
         tensor = torch.from_numpy(gray).float() / 255.0
         tensor = F.interpolate(
