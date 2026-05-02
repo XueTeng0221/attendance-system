@@ -1,10 +1,12 @@
 import asyncio
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
+from app.api.v1.deps import require_teacher
 from app.core.config import settings
 from app.db.session import SessionLocal
+from app.models.entities import User
 from app.schemas.reports import GroupPhotoResponse
 from app.services.container import recognition_service
 from app.utils.image import ImageDecodeError, decode_image_bytes
@@ -16,6 +18,7 @@ router = APIRouter(prefix="/group-photo", tags=["group-photo"])
 async def recognize_group_photo(
     event_name: str = Form(...),
     image: UploadFile = File(...),
+    _: User = Depends(require_teacher),
 ):
     try:
         image_bgr = decode_image_bytes(await image.read())

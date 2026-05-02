@@ -14,6 +14,7 @@ class AttendanceResponse(BaseModel):
     status: str
     confidence: float
     liveness_score: float
+    liveness_breakdown: dict | None = None
     reason: str
     attendance_time: datetime
     student: StudentRead | None = None
