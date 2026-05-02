@@ -11,8 +11,10 @@ from app.models.entities import (
     AttendanceRecord,
     EmotionEvent,
     Student,
+    User,
 )
 from app.schemas.reports import GroupPhotoMatchItem, GroupPhotoResponse
+from app.services.auth import hash_password
 from app.services.emotion import EmotionAnalyzer
 from app.services.face_engine import FaceDetector
 from app.services.liveness import LivenessDetector
@@ -34,10 +36,16 @@ class RecognitionService:
         name: str,
         class_name: str,
         image_bgr: np.ndarray,
+        password: str | None = None,
     ) -> Student:
         existing = db.scalar(select(Student).where(Student.student_no == student_no))
         if existing:
             raise ValueError(f"student_no '{student_no}' already exists")
+
+        # 学生登录账号沿用学号，避免与现有教师账号冲突。
+        existing_user = db.scalar(select(User).where(User.username == student_no))
+        if existing_user is not None:
+            raise ValueError(f"username '{student_no}' already exists")
 
         detections = self.detector.detect(image_bgr)
         if not detections:
@@ -54,45 +62,99 @@ class RecognitionService:
             face_embedding=self.embedder.to_json(embedding),
         )
         db.add(student)
+        db.flush()  # 拿到 student.id 给 User 引用
+
+        login_password = password or student_no
+        db.add(
+            User(
+                username=student_no,
+                password_hash=hash_password(login_password),
+                role="student",
+                student_id=student.id,
+            )
+        )
         db.commit()
         db.refresh(student)
         return student
 
     def process_attendance(self, db: Session, image_bgr: np.ndarray) -> dict:
-        detections = self.detector.detect(image_bgr)
+        return self.process_attendance_multi(db, [image_bgr], current_user=None)
+
+    def process_attendance_multi(
+        self,
+        db: Session,
+        frames_bgr: list[np.ndarray],
+        current_user: User | None,
+    ) -> dict:
+        '''多帧考勤主链路。frames_bgr 接受任意 ≥1 张图，多帧时启用运动校验。'''
         now = datetime.utcnow()
 
-        if not detections:
+        if not frames_bgr:
             return self._save_attendance(
                 db,
                 status="failed",
                 confidence=0.0,
                 liveness_score=0.0,
+                liveness_breakdown=None,
+                emotion=("neutral", 0.0),
+                student=None,
+                reason="未收到任何图像",
+                now=now,
+            )
+
+        # 每帧检测最大人脸；缺脸帧直接累计为采集失败原因。
+        faces: list[np.ndarray] = []
+        for frame in frames_bgr:
+            detections = self.detector.detect(frame)
+            if not detections:
+                continue
+            best_box, _ = max(detections, key=lambda item: self._box_area(item[0]))
+            faces.append(crop_face(frame, best_box))
+
+        if not faces:
+            return self._save_attendance(
+                db,
+                status="failed",
+                confidence=0.0,
+                liveness_score=0.0,
+                liveness_breakdown=None,
                 emotion=("neutral", 0.0),
                 student=None,
                 reason="未检测到人脸",
                 now=now,
             )
 
-        best_box, _ = max(detections, key=lambda item: self._box_area(item[0]))
-        face = crop_face(image_bgr, best_box)
+        last_face = faces[-1]
+        emotion = self.emotion.predict(last_face)
 
-        liveness_score = self.liveness.score(face)
-        emotion = self.emotion.predict(face)
+        # 多帧走 score_sequence；若仅有 1 帧则退化为单帧打分。
+        is_multi = len(faces) >= settings.liveness_min_frames
+        if is_multi:
+            liveness = self.liveness.score_sequence(faces)
+            liveness_score = liveness["score"]
+            liveness_passed = liveness["passed"]
+            liveness_reason = liveness["reason"]
+        else:
+            single = self.liveness.score_single(last_face)
+            liveness_score = single["score"]
+            liveness_passed = liveness_score >= settings.liveness_threshold
+            liveness_reason = "" if liveness_passed else "活体检测未通过"
+            liveness = {**single, "passed": liveness_passed, "reason": liveness_reason}
 
-        if liveness_score < settings.liveness_threshold:
+        if not liveness_passed:
             return self._save_attendance(
                 db,
                 status="failed",
                 confidence=0.0,
                 liveness_score=liveness_score,
+                liveness_breakdown=liveness,
                 emotion=emotion,
                 student=None,
-                reason="活体检测未通过",
+                reason=liveness_reason or "活体检测未通过",
                 now=now,
             )
 
-        embedding = self.embedder.extract(face)
+        embedding = self.embedder.extract(last_face)
         matched_student, best_score = self._match_student(db, embedding)
 
         if matched_student is None or best_score < settings.recognition_threshold:
@@ -101,17 +163,34 @@ class RecognitionService:
                 status="failed",
                 confidence=best_score,
                 liveness_score=liveness_score,
+                liveness_breakdown=liveness,
                 emotion=emotion,
                 student=None,
                 reason="人脸库匹配失败",
                 now=now,
             )
 
+        # 学生角色仅允许匹配自己，避免代签。
+        if current_user is not None and current_user.role == "student":
+            if matched_student.id != current_user.student_id:
+                return self._save_attendance(
+                    db,
+                    status="failed",
+                    confidence=best_score,
+                    liveness_score=liveness_score,
+                    liveness_breakdown=liveness,
+                    emotion=emotion,
+                    student=None,
+                    reason="人脸与登录账号不一致",
+                    now=now,
+                )
+
         return self._save_attendance(
             db,
             status="success",
             confidence=best_score,
             liveness_score=liveness_score,
+            liveness_breakdown=liveness,
             emotion=emotion,
             student=matched_student,
             reason="",
@@ -120,7 +199,13 @@ class RecognitionService:
 
     def process_group_photo(self, db: Session, image_bgr: np.ndarray, event_name: str) -> GroupPhotoResponse:
         start = perf_counter()
-        detections = self.detector.detect(image_bgr)
+        detections = self.detector.detect_tiled(
+            image_bgr,
+            conf=settings.group_photo_detection_conf,
+            tile_size=settings.group_photo_tile_size,
+            overlap=settings.group_photo_tile_overlap,
+            nms_iou=settings.group_photo_nms_iou,
+        )
 
         matched_items: list[GroupPhotoMatchItem] = []
         seen_student_ids: set[int] = set()
@@ -263,6 +348,7 @@ class RecognitionService:
         status: str,
         confidence: float,
         liveness_score: float,
+        liveness_breakdown: dict | None,
         emotion: tuple[str, float],
         student: Student | None,
         reason: str,
@@ -295,6 +381,7 @@ class RecognitionService:
             "status": status,
             "confidence": confidence,
             "liveness_score": liveness_score,
+            "liveness_breakdown": liveness_breakdown,
             "reason": reason,
             "attendance_time": now,
             "student": student,
