@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 
-import { getEmotionReport, getParticipationReport } from "../api/client";
+import {
+  exportAttendance,
+  exportParticipation,
+  getEmotionReport,
+  getParticipationReport
+} from "../api/client";
 import type { EmotionReport, ParticipationRow } from "../types";
 
 export default function EmotionDashboardPage() {
@@ -8,6 +13,24 @@ export default function EmotionDashboardPage() {
   const [participationRows, setParticipationRows] = useState<ParticipationRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
+  const [exporting, setExporting] = useState<string>("");
+
+  const handleExport = async (kind: "attendance" | "participation", format: "xlsx" | "csv") => {
+    const key = `${kind}-${format}`;
+    setExporting(key);
+    setErrorText("");
+    try {
+      if (kind === "attendance") {
+        await exportAttendance(format);
+      } else {
+        await exportParticipation(format);
+      }
+    } catch {
+      setErrorText("导出失败，请稍后重试");
+    } finally {
+      setExporting("");
+    }
+  };
 
   const loadReport = async () => {
     setLoading(true);
@@ -84,7 +107,43 @@ export default function EmotionDashboardPage() {
 
       <section className="panel">
         <h2>活动参与频次</h2>
-        <p className="panel-subtitle">按学生维度统计参与班级活动次数。</p>
+        <p className="panel-subtitle">按学生维度统计参与班级活动次数，可一键导出表格。</p>
+
+        <div className="action-row">
+          <button
+            className="btn"
+            type="button"
+            onClick={() => handleExport("attendance", "xlsx")}
+            disabled={exporting !== ""}
+          >
+            {exporting === "attendance-xlsx" ? "导出中..." : "考勤记录 ↓ xlsx"}
+          </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => handleExport("attendance", "csv")}
+            disabled={exporting !== ""}
+          >
+            {exporting === "attendance-csv" ? "导出中..." : "考勤记录 ↓ csv"}
+          </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => handleExport("participation", "xlsx")}
+            disabled={exporting !== ""}
+          >
+            {exporting === "participation-xlsx" ? "导出中..." : "活动参与 ↓ xlsx"}
+          </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => handleExport("participation", "csv")}
+            disabled={exporting !== ""}
+          >
+            {exporting === "participation-csv" ? "导出中..." : "活动参与 ↓ csv"}
+          </button>
+        </div>
+
         <div className="table-shell">
           <table>
             <thead>

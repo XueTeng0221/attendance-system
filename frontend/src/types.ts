@@ -1,3 +1,18 @@
+export type Role = "teacher" | "student";
+
+export interface CurrentUser {
+  id: number;
+  username: string;
+  role: Role;
+  student_id: number | null;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+  user: CurrentUser;
+}
+
 export interface Student {
   id: number;
   student_no: string;
@@ -11,10 +26,27 @@ export interface EmotionResult {
   score: number;
 }
 
+export interface LivenessBreakdown {
+  score?: number;
+  passed?: boolean;
+  reason?: string;
+  single_avg?: number;
+  motion?: number;
+  motion_raw?: number;
+  brightness?: number;
+  brightness_var?: number;
+  frames?: number;
+  moire?: number;
+  blur?: number;
+  texture?: number;
+  color?: number;
+}
+
 export interface AttendanceResponse {
   status: "success" | "failed";
   confidence: number;
   liveness_score: number;
+  liveness_breakdown: LivenessBreakdown | null;
   reason: string;
   attendance_time: string;
   student: Student | null;

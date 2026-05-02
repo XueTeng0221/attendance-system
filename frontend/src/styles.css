@@ -334,6 +334,107 @@ th {
   }
 }
 
+.hero-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(8, 28, 45, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.user-chip-role {
+  font-family: "Chakra Petch", sans-serif;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.user-chip-name {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.btn-danger {
+  border-color: transparent;
+  color: #2a0815;
+  background: linear-gradient(100deg, var(--danger), #ff9fa9);
+}
+
+.status-chip.tone-success {
+  background: rgba(92, 230, 168, 0.18);
+  border-color: rgba(92, 230, 168, 0.55);
+}
+
+.status-chip.tone-warn {
+  background: rgba(255, 127, 149, 0.16);
+  border-color: rgba(255, 127, 149, 0.55);
+  color: #ffd9e0;
+}
+
+.status-chip.tone-active {
+  background: rgba(21, 209, 255, 0.16);
+  border-color: rgba(21, 209, 255, 0.55);
+  color: #d6f4ff;
+}
+
+.login-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  padding: 28px;
+  border-radius: 22px;
+  background: linear-gradient(150deg, rgba(15, 44, 74, 0.92), rgba(24, 54, 64, 0.78));
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow);
+}
+
+.login-card h1 {
+  margin: 8px 0 4px;
+  font-size: 28px;
+  font-family: "Chakra Petch", sans-serif;
+}
+
+.login-hint {
+  margin-top: 16px;
+  color: var(--text-sub);
+  font-size: 13px;
+}
+
+.login-hint code {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
 @media (max-width: 960px) {
   .page-grid {
     grid-template-columns: 1fr;
