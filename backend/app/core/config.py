@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     group_photo_nms_iou: float = 0.40
     recognition_threshold: float = 0.42
     liveness_threshold: float = 0.40
-    request_timeout_sec: int = 20
+    request_timeout_sec: int = 60
 
     # 多帧活体参数
     liveness_min_frames: int = 3
