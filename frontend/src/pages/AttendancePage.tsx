@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { CSSProperties, FormEvent } from "react";
 
-import { checkAttendance, listStudents, registerStudent } from "../api/client";
-import type { AttendanceResponse, CurrentUser, Student } from "../types";
+import { checkAttendance, detectAttendanceFace, importStudentsFromDirectory, listStudents, registerStudent } from "../api/client";
+import type { AttendanceResponse, CurrentUser, FaceBox, Student, StudentBatchImportResponse } from "../types";
 
 type CaptureMode = "manual" | "auto";
 
@@ -20,6 +20,25 @@ const AUTO_INTERVAL_MS = 1500;
 const FRAME_COUNT = 3;
 const FRAME_INTERVAL_MS = 200;
 const MAX_AUTO_FAILURES = 8;
+const FACE_DETECT_INTERVAL_MS = 1200;
+const IMPORT_BATCH_SIZE = 10;
+
+interface FaceOverlayBox {
+  leftPct: number;
+  topPct: number;
+  widthPct: number;
+  heightPct: number;
+  confidence: number;
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  if (size <= 0) return [items];
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
 
 function toReadableScore(score: number): string {
   return `${(score * 100).toFixed(2)}%`;
@@ -65,14 +84,18 @@ export default function AttendancePage({ user }: AttendancePageProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const autoTimerRef = useRef<number | null>(null);
+  const faceDetectTimerRef = useRef<number | null>(null);
   const autoBusyRef = useRef<boolean>(false);
+  const faceDetectBusyRef = useRef<boolean>(false);
   const failureCountRef = useRef<number>(0);
   const modeRef = useRef<CaptureMode>("manual");
+  const directoryInputRef = useRef<HTMLInputElement | null>(null);
 
   const [streamReady, setStreamReady] = useState(false);
   const [cameraError, setCameraError] = useState<string>("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [result, setResult] = useState<AttendanceResponse | null>(null);
+  const [faceOverlayBox, setFaceOverlayBox] = useState<FaceOverlayBox | null>(null);
   const [mode, setMode] = useState<CaptureMode>("manual");
   const [autoRunning, setAutoRunning] = useState(false);
 
@@ -86,6 +109,11 @@ export default function AttendancePage({ user }: AttendancePageProps) {
   const [className, setClassName] = useState("");
   const [studentPassword, setStudentPassword] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [batchFiles, setBatchFiles] = useState<File[]>([]);
+  const [batchImporting, setBatchImporting] = useState(false);
+  const [batchImportError, setBatchImportError] = useState("");
+  const [batchImportResult, setBatchImportResult] = useState<StudentBatchImportResponse | null>(null);
+  const [batchProcessedCount, setBatchProcessedCount] = useState(0);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -113,6 +141,10 @@ export default function AttendancePage({ user }: AttendancePageProps) {
         window.clearInterval(autoTimerRef.current);
         autoTimerRef.current = null;
       }
+      if (faceDetectTimerRef.current !== null) {
+        window.clearInterval(faceDetectTimerRef.current);
+        faceDetectTimerRef.current = null;
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
@@ -120,8 +152,15 @@ export default function AttendancePage({ user }: AttendancePageProps) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!directoryInputRef.current) return;
+    directoryInputRef.current.setAttribute("webkitdirectory", "");
+    directoryInputRef.current.setAttribute("directory", "");
+  }, []);
+
   const startCamera = async () => {
     setCameraError("");
+    setFaceOverlayBox(null);
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       if (videoRef.current) {
@@ -135,7 +174,7 @@ export default function AttendancePage({ user }: AttendancePageProps) {
     }
   };
 
-  const captureFrames = useCallback(async (count = FRAME_COUNT, intervalMs = FRAME_INTERVAL_MS): Promise<Blob[]> => {
+  const captureSingleFrame = useCallback(async (): Promise<{ blob: Blob; width: number; height: number }> => {
     const video = videoRef.current;
     if (!video || video.videoWidth === 0) {
       throw new Error("视频组件未就绪");
@@ -148,23 +187,90 @@ export default function AttendancePage({ user }: AttendancePageProps) {
     if (!ctx) {
       throw new Error("Canvas 初始化失败");
     }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((value) => resolve(value), "image/jpeg", 0.9);
+    });
+    if (!blob) {
+      throw new Error("图像抓拍失败");
+    }
+    return { blob, width: canvas.width, height: canvas.height };
+  }, []);
 
+  const captureFrames = useCallback(async (count = FRAME_COUNT, intervalMs = FRAME_INTERVAL_MS): Promise<Blob[]> => {
     const blobs: Blob[] = [];
     for (let i = 0; i < count; i += 1) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise<Blob | null>((resolve) => {
-        canvas.toBlob((value) => resolve(value), "image/jpeg", 0.9);
-      });
-      if (!blob) {
-        throw new Error("图像抓拍失败");
-      }
-      blobs.push(blob);
+      const captured = await captureSingleFrame();
+      blobs.push(captured.blob);
       if (i < count - 1) {
         await new Promise<void>((resolve) => window.setTimeout(resolve, intervalMs));
       }
     }
     return blobs;
+  }, [captureSingleFrame]);
+
+  const toOverlayBox = useCallback((box: FaceBox, imageWidth: number, imageHeight: number): FaceOverlayBox | null => {
+    if (imageWidth <= 0 || imageHeight <= 0) return null;
+    const left = Math.max(0, Math.min(imageWidth, box.x1));
+    const top = Math.max(0, Math.min(imageHeight, box.y1));
+    const right = Math.max(left, Math.min(imageWidth, box.x2));
+    const bottom = Math.max(top, Math.min(imageHeight, box.y2));
+    const width = right - left;
+    const height = bottom - top;
+    if (width <= 1 || height <= 1) return null;
+    return {
+      leftPct: (left / imageWidth) * 100,
+      topPct: (top / imageHeight) * 100,
+      widthPct: (width / imageWidth) * 100,
+      heightPct: (height / imageHeight) * 100,
+      confidence: box.confidence
+    };
   }, []);
+
+  const runFaceDetectOnce = useCallback(async () => {
+    if (!streamReady || phase === "capturing" || phase === "uploading") return;
+    if (faceDetectBusyRef.current) return;
+    faceDetectBusyRef.current = true;
+    try {
+      const captured = await captureSingleFrame();
+      const data = await detectAttendanceFace(captured.blob);
+      if (!data.found || !data.box) {
+        setFaceOverlayBox(null);
+        return;
+      }
+      const imageWidth = data.image_width > 0 ? data.image_width : captured.width;
+      const imageHeight = data.image_height > 0 ? data.image_height : captured.height;
+      setFaceOverlayBox(toOverlayBox(data.box, imageWidth, imageHeight));
+    } catch {
+      setFaceOverlayBox(null);
+    } finally {
+      faceDetectBusyRef.current = false;
+    }
+  }, [captureSingleFrame, phase, streamReady, toOverlayBox]);
+
+  useEffect(() => {
+    if (faceDetectTimerRef.current !== null) {
+      window.clearInterval(faceDetectTimerRef.current);
+      faceDetectTimerRef.current = null;
+    }
+    faceDetectBusyRef.current = false;
+    if (!streamReady) {
+      setFaceOverlayBox(null);
+      return;
+    }
+    const tick = () => {
+      void runFaceDetectOnce();
+    };
+    void tick();
+    faceDetectTimerRef.current = window.setInterval(tick, FACE_DETECT_INTERVAL_MS);
+    return () => {
+      if (faceDetectTimerRef.current !== null) {
+        window.clearInterval(faceDetectTimerRef.current);
+        faceDetectTimerRef.current = null;
+      }
+      faceDetectBusyRef.current = false;
+    };
+  }, [runFaceDetectOnce, streamReady]);
 
   const runAttendanceOnce = useCallback(
     async (isAuto: boolean) => {
@@ -302,6 +408,63 @@ export default function AttendancePage({ user }: AttendancePageProps) {
     }
   };
 
+  const handleBatchImport = async () => {
+    setBatchImportError("");
+    setBatchImportResult(null);
+    setBatchProcessedCount(0);
+
+    if (batchFiles.length === 0) {
+      setBatchImportError("请先选择包含人脸图片的目录");
+      return;
+    }
+
+    setBatchImporting(true);
+    const chunks = chunkArray(batchFiles, IMPORT_BATCH_SIZE);
+    const aggregated: StudentBatchImportResponse = {
+      total: batchFiles.length,
+      success_count: 0,
+      failed_count: 0,
+      items: []
+    };
+    const createdStudents: Student[] = [];
+    let processedCount = 0;
+
+    try {
+      for (const chunk of chunks) {
+        const data = await importStudentsFromDirectory(chunk);
+        aggregated.success_count += data.success_count;
+        aggregated.failed_count += data.failed_count;
+        aggregated.items.push(...data.items);
+        setBatchImportResult({ ...aggregated });
+
+        createdStudents.push(
+          ...data.items.map((item) => item.student).filter((student): student is Student => student !== null)
+        );
+        processedCount += chunk.length;
+        setBatchProcessedCount(processedCount);
+      }
+
+      setStudents((prev) => {
+        const existingNos = new Set(prev.map((item) => item.student_no));
+        const dedup = createdStudents.filter((student) => !existingNos.has(student.student_no));
+        return [...dedup, ...prev];
+      });
+    } catch (error) {
+      if (aggregated.items.length > 0) {
+        setBatchImportResult({ ...aggregated });
+      }
+      const detail =
+        typeof error === "object" && error && "response" in error
+          ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ((error as any).response?.data?.detail as string | undefined)
+          : undefined;
+      const errorMessage = detail || (error instanceof Error ? error.message : "批量导入失败");
+      setBatchImportError(`${errorMessage}（已完成 ${processedCount}/${batchFiles.length}）`);
+    } finally {
+      setBatchImporting(false);
+    }
+  };
+
   const livenessLine = useMemo(() => {
     if (!result) return null;
     const breakdown = result.liveness_breakdown;
@@ -324,6 +487,16 @@ export default function AttendancePage({ user }: AttendancePageProps) {
     return <p>活体：{fragments.join(" / ")}</p>;
   }, [result]);
 
+  const faceBoxStyle = useMemo<CSSProperties | null>(() => {
+    if (!faceOverlayBox) return null;
+    return {
+      left: `${faceOverlayBox.leftPct}%`,
+      top: `${faceOverlayBox.topPct}%`,
+      width: `${faceOverlayBox.widthPct}%`,
+      height: `${faceOverlayBox.heightPct}%`
+    };
+  }, [faceOverlayBox]);
+
   return (
     <div className={isTeacher ? "page-grid" : "page-grid single-column"}>
       <section className="panel panel-glow">
@@ -334,6 +507,11 @@ export default function AttendancePage({ user }: AttendancePageProps) {
 
         <div className="video-shell">
           <video ref={videoRef} autoPlay playsInline muted />
+          {faceBoxStyle && faceOverlayBox ? (
+            <div className="face-box" style={faceBoxStyle}>
+              <span className="face-box-label">人脸 {(faceOverlayBox.confidence * 100).toFixed(0)}%</span>
+            </div>
+          ) : null}
         </div>
 
         <div className="action-row">
@@ -361,6 +539,7 @@ export default function AttendancePage({ user }: AttendancePageProps) {
           状态：{phaseText(phase)}
           {mode === "auto" && autoRunning ? "（自动）" : ""}
         </p>
+        {streamReady ? <p className="panel-subtitle">人脸检测：{faceBoxStyle ? "已识别并框选" : "未检测到人脸"}</p> : null}
         {cameraError ? <p className="error-text">{cameraError}</p> : null}
 
         {result ? (
@@ -424,6 +603,71 @@ export default function AttendancePage({ user }: AttendancePageProps) {
           </form>
           {registerError ? <p className="error-text">{registerError}</p> : null}
           {registerSuccess ? <p className="success-text">{registerSuccess}</p> : null}
+
+          <h3>从目录批量导入人脸</h3>
+          <p className="panel-subtitle">文件名格式：学号-姓名-班级-性别.*</p>
+          <div className="form-grid">
+            <label>
+              人脸目录
+              <input
+                ref={directoryInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  const files = e.target.files ? Array.from(e.target.files) : [];
+                  setBatchFiles(files);
+                  setBatchProcessedCount(0);
+                  setBatchImportResult(null);
+                  setBatchImportError("");
+                }}
+              />
+            </label>
+            <button
+              className="btn btn-accent"
+              type="button"
+              onClick={handleBatchImport}
+              disabled={batchImporting || batchFiles.length === 0}
+            >
+              {batchImporting ? `导入中（${batchProcessedCount}/${batchFiles.length}）...` : "开始批量导入"}
+            </button>
+          </div>
+          {batchFiles.length > 0 ? <p>已选择图片：{batchFiles.length} 张</p> : null}
+          {batchImporting ? <p>当前按每批 {IMPORT_BATCH_SIZE} 张自动分批导入</p> : null}
+          {batchImportError ? <p className="error-text">{batchImportError}</p> : null}
+          {batchImportResult ? (
+            <div className="result-card">
+              <p>
+                导入结果：总计 {batchImportResult.total}，成功 {batchImportResult.success_count}，失败{" "}
+                {batchImportResult.failed_count}
+              </p>
+              {batchImportResult.failed_count > 0 ? (
+                <div className="table-shell">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>文件名</th>
+                        <th>失败原因</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batchImportResult.items
+                        .filter((item) => !item.success)
+                        .slice(0, 20)
+                        .map((item, idx) => (
+                          <tr key={`${item.filename}-${idx}`}>
+                            <td>{item.filename}</td>
+                            <td>{item.message}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="success-text">全部导入成功</p>
+              )}
+            </div>
+          ) : null}
 
           <h3>人脸库学生列表</h3>
           <div className="table-shell">

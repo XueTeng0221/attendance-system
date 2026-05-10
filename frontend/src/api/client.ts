@@ -5,9 +5,11 @@ import type {
   AttendanceResponse,
   CurrentUser,
   EmotionReport,
+  FaceDetectionResponse,
   GroupPhotoResponse,
   LoginResponse,
   ParticipationRow,
+  StudentBatchImportResponse,
   Student
 } from "../types";
 
@@ -72,6 +74,13 @@ export async function registerStudent(input: {
   return response.data;
 }
 
+export async function importStudentsFromDirectory(files: File[]): Promise<StudentBatchImportResponse> {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("images", file, file.name));
+  const response = await api.post<StudentBatchImportResponse>("/students/import-directory", formData);
+  return response.data;
+}
+
 export async function listStudents(): Promise<Student[]> {
   const response = await api.get<Student[]>("/students");
   return response.data;
@@ -82,6 +91,13 @@ export async function checkAttendance(blobs: Blob[]): Promise<AttendanceResponse
   blobs.forEach((blob, idx) => formData.append("images", blob, `frame-${idx}.jpg`));
 
   const response = await api.post<AttendanceResponse>("/attendance/check", formData);
+  return response.data;
+}
+
+export async function detectAttendanceFace(blob: Blob): Promise<FaceDetectionResponse> {
+  const formData = new FormData();
+  formData.append("image", blob, "frame.jpg");
+  const response = await api.post<FaceDetectionResponse>("/attendance/detect-face", formData);
   return response.data;
 }
 

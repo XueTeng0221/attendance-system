@@ -10,6 +10,21 @@ class EmotionResult(BaseModel):
     score: float
 
 
+class FaceBox(BaseModel):
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+    confidence: float
+
+
+class FaceDetectionResponse(BaseModel):
+    found: bool
+    box: FaceBox | None = None
+    image_width: int
+    image_height: int
+
+
 class AttendanceResponse(BaseModel):
     status: str
     confidence: float

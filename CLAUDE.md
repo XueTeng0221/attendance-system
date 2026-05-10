@@ -49,7 +49,7 @@ There is no test suite, no linter config, and no pre-commit hook in the repo. Do
 - Three pages under `src/pages/` (`AttendancePage`, `GroupPhotoPage`, `EmotionDashboardPage`) — all HTTP goes through `src/api/client.ts` (axios). Shared response/domain types in `src/types.ts`.
 - Attendance page captures from `getUserMedia` and POSTs a frame as multipart `image`; camera failure handling is a first-class UX concern per the spec.
 
-## Conventions worth knowing
+## Conventions worth kno    wing
 
 - Code comments and user-facing error messages are written in Chinese; match that when editing existing files.
 - API contract is multipart form fields (not JSON) for any endpoint that takes an image — see `students/register`, `attendance/check`, `group-photo/recognize`.

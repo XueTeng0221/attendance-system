@@ -7,7 +7,7 @@ from app.api.v1.deps import get_current_user
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.entities import User
-from app.schemas.attendance import AttendanceResponse
+from app.schemas.attendance import AttendanceResponse, FaceBox, FaceDetectionResponse
 from app.services.container import recognition_service
 from app.utils.image import ImageDecodeError, decode_image_bytes
 
@@ -48,5 +48,39 @@ async def check_attendance(
         return result
     except asyncio.TimeoutError as exc:
         raise HTTPException(status_code=504, detail="识别超时，请稍后重试") from exc
+    except ImageDecodeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/detect-face", response_model=FaceDetectionResponse)
+async def detect_face(
+    image: UploadFile = File(...),
+    _: User = Depends(get_current_user),
+):
+    try:
+        image_bgr = decode_image_bytes(await image.read())
+
+        def _run_detect():
+            detection = recognition_service.detect_best_face(image_bgr)
+            if detection is None:
+                return FaceDetectionResponse(
+                    found=False,
+                    box=None,
+                    image_width=int(image_bgr.shape[1]),
+                    image_height=int(image_bgr.shape[0]),
+                )
+            return FaceDetectionResponse(
+                found=True,
+                box=FaceBox.model_validate(detection),
+                image_width=int(image_bgr.shape[1]),
+                image_height=int(image_bgr.shape[0]),
+            )
+
+        return await asyncio.wait_for(
+            run_in_threadpool(_run_detect),
+            timeout=settings.request_timeout_sec,
+        )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="人脸检测超时，请稍后重试") from exc
     except ImageDecodeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

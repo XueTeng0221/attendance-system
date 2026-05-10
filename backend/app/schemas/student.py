@@ -18,3 +18,21 @@ class StudentRead(StudentBase):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class StudentBatchImportItem(BaseModel):
+    filename: str
+    student_no: str | None = None
+    name: str | None = None
+    class_name: str | None = None
+    gender: str | None = None
+    success: bool
+    message: str
+    student: StudentRead | None = None
+
+
+class StudentBatchImportResponse(BaseModel):
+    total: int
+    success_count: int
+    failed_count: int
+    items: list[StudentBatchImportItem]

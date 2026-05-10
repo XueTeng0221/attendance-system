@@ -54,11 +54,17 @@ attendance-system/
 - `POST /api/v1/students/register`
   - 表单字段：`student_no`、`name`、`class_name`、`image`
   - 用途：学生入库
+- `POST /api/v1/students/import-directory`
+  - 表单字段：`images`（多文件）
+  - 用途：按文件名 `学号-姓名-班级-性别.*` 批量导入学生人脸
 - `GET /api/v1/students`
   - 用途：查询人脸库
 - `POST /api/v1/attendance/check`
   - 表单字段：`image`
   - 用途：考勤识别（状态、学生信息、时间、活体分、情绪）
+- `POST /api/v1/attendance/detect-face`
+  - 表单字段：`image`
+  - 用途：抓拍前实时人脸检测，返回框选坐标
 - `POST /api/v1/group-photo/recognize`
   - 表单字段：`event_name`、`image`
   - 用途：合照批量识别（匹配名单、未匹配数、耗时）
@@ -79,8 +85,8 @@ attendance-system/
 
 ## 4. 前端功能说明
 
-- 基础考勤页：实时摄像头预览、抓拍考勤、结果渲染。
-- 学生入库：学号/姓名/班级/人脸照片注册，形成人脸库。
+- 基础考勤页：实时摄像头预览、自动人脸框选、抓拍考勤、结果渲染。
+- 学生入库：学号/姓名/班级/人脸照片注册，支持从目录按文件名规范批量导入，形成人脸库。
 - 合照识别页：上传活动合照并查看匹配名单、置信度与情绪。
 - 情绪与报表页：查看情绪柱状统计、最近情绪时间线、活动参与排行。
 

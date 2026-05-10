@@ -80,6 +80,20 @@ class RecognitionService:
     def process_attendance(self, db: Session, image_bgr: np.ndarray) -> dict:
         return self.process_attendance_multi(db, [image_bgr], current_user=None)
 
+    def detect_best_face(self, image_bgr: np.ndarray) -> dict | None:
+        detections = self.detector.detect(image_bgr)
+        if not detections:
+            return None
+        best_box, confidence = max(detections, key=lambda item: self._box_area(item[0]))
+        x1, y1, x2, y2 = best_box
+        return {
+            "x1": int(x1),
+            "y1": int(y1),
+            "x2": int(x2),
+            "y2": int(y2),
+            "confidence": float(confidence),
+        }
+
     def process_attendance_multi(
         self,
         db: Session,
@@ -355,6 +369,15 @@ class RecognitionService:
         now: datetime,
     ) -> dict:
         emotion_label, emotion_score = emotion
+        student_payload = None
+        if student is not None:
+            student_payload = {
+                "id": student.id,
+                "student_no": student.student_no,
+                "name": student.name,
+                "class_name": student.class_name,
+                "created_at": student.created_at,
+            }
 
         record = AttendanceRecord(
             student_id=student.id if student else None,
@@ -384,7 +407,7 @@ class RecognitionService:
             "liveness_breakdown": liveness_breakdown,
             "reason": reason,
             "attendance_time": now,
-            "student": student,
+            "student": student_payload,
             "emotion": {
                 "emotion": emotion_label,
                 "score": emotion_score,
