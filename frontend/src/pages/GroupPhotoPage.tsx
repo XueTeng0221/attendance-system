@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties, FormEvent } from "react";
 
 import { recognizeGroupPhoto } from "../api/client";
 import type { GroupPhotoResponse } from "../types";
@@ -14,6 +14,38 @@ export default function GroupPhotoPage() {
   const [result, setResult] = useState<GroupPhotoResponse | null>(null);
   const [errorText, setErrorText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
+
+  useEffect(() => {
+    if (!photo) {
+      setPreviewUrl("");
+      return;
+    }
+    const url = URL.createObjectURL(photo);
+    setPreviewUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [photo]);
+
+  const faceBoxStyles = useMemo(() => {
+    if (!result || result.image_width <= 0 || result.image_height <= 0) {
+      return [];
+    }
+    return result.face_boxes.map((box) => {
+      const left = (box.x1 / result.image_width) * 100;
+      const top = (box.y1 / result.image_height) * 100;
+      const width = ((box.x2 - box.x1) / result.image_width) * 100;
+      const height = ((box.y2 - box.y1) / result.image_height) * 100;
+      const style: CSSProperties = {
+        left: `${Math.max(0, Math.min(100, left))}%`,
+        top: `${Math.max(0, Math.min(100, top))}%`,
+        width: `${Math.max(0, width)}%`,
+        height: `${Math.max(0, height)}%`
+      };
+      return { box, style };
+    });
+  }, [result]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -62,7 +94,11 @@ export default function GroupPhotoPage() {
               type="file"
               accept="image/*"
               required
-              onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                setPhoto(e.target.files?.[0] ?? null);
+                setResult(null);
+                setErrorText("");
+              }}
             />
           </label>
 
@@ -75,6 +111,23 @@ export default function GroupPhotoPage() {
 
         {result ? (
           <div className="result-card">
+            {previewUrl ? (
+              <div className="photo-preview-shell">
+                <img src={previewUrl} alt="合照预览" className="photo-preview-image" />
+                {faceBoxStyles.map(({ box, style }, idx) => (
+                  <div
+                    key={`${box.x1}-${box.y1}-${box.x2}-${box.y2}-${idx}`}
+                    className={`group-face-box ${box.matched ? "matched" : "unmatched"}`}
+                    style={style}
+                  >
+                    <span className="group-face-box-label">
+                      {box.matched ? box.name || box.student_no || "已匹配" : "未匹配"} {asPercent(box.confidence)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             <p>活动：{result.event_name}</p>
             <p>检测到人脸：{result.detected_faces}</p>
             <p>匹配成功：{result.matched_students.length}</p>

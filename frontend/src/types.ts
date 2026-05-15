@@ -96,10 +96,25 @@ export interface GroupPhotoMatchItem {
   emotion_score: number;
 }
 
+export interface GroupPhotoFaceBox {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  confidence: number;
+  matched: boolean;
+  student_no: string | null;
+  name: string | null;
+  class_name: string | null;
+}
+
 export interface GroupPhotoResponse {
   event_name: string;
   detected_faces: number;
   matched_students: GroupPhotoMatchItem[];
+  face_boxes: GroupPhotoFaceBox[];
+  image_width: number;
+  image_height: number;
   unmatched_faces: number;
   processing_time_ms: number;
 }

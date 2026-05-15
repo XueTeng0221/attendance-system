@@ -196,6 +196,51 @@ body::before {
   white-space: nowrap;
 }
 
+.photo-preview-shell {
+  position: relative;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(172, 210, 242, 0.24);
+  background: #04111f;
+}
+
+.photo-preview-image {
+  width: 100%;
+  display: block;
+}
+
+.group-face-box {
+  position: absolute;
+  border: 2px solid rgba(255, 127, 149, 0.95);
+  box-shadow: 0 0 0 1px rgba(10, 30, 48, 0.8);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.group-face-box.matched {
+  border-color: rgba(92, 230, 168, 0.95);
+  box-shadow: 0 0 0 1px rgba(10, 30, 48, 0.8), 0 0 12px rgba(92, 230, 168, 0.36);
+}
+
+.group-face-box-label {
+  position: absolute;
+  left: 0;
+  top: -24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 127, 149, 0.92);
+  color: #2f0610;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.group-face-box.matched .group-face-box-label {
+  background: rgba(92, 230, 168, 0.92);
+  color: #073020;
+}
+
 .action-row {
   display: flex;
   flex-wrap: wrap;

@@ -38,7 +38,6 @@ class LivenessDetector:
         outer_mask = radius >= max_radius * 0.55
         center_mean = float(magnitude[center_mask].mean()) if center_mask.any() else 0.0
         outer_mean = float(magnitude[outer_mask].mean()) if outer_mask.any() else 0.0
-        # 修复：原实现把 outer 与 center 减反，导致正常采集 high_freq 落在 0 附近。
         high_freq = outer_mean - center_mean
         texture_norm = float(np.clip((high_freq + 4.5) / 6.0, 0.0, 1.0))
 
@@ -103,17 +102,22 @@ class LivenessDetector:
         brightness_norm = float(np.clip(brightness_var / 0.002, 0.0, 1.0))
 
         final = 0.55 * single_avg + 0.30 * motion_norm + 0.15 * brightness_norm
+        moire_avg = float(np.mean([item["moire"] for item in per_frame]))
 
-        passed = (
-            motion_raw >= settings.liveness_motion_threshold
-            and final >= settings.liveness_threshold
-        )
-
+        # 按策略：亮度方差分数 > 0 或摩尔纹分数 > 0.02，直接拒绝。
+        passed = False
         reason = ""
-        if motion_raw < settings.liveness_motion_threshold:
-            reason = "未检测到自然运动，疑似照片/静态画面"
-        elif final < settings.liveness_threshold:
-            reason = "活体综合评分不足"
+        if brightness_norm > 0 and moire_avg > 0.02:
+            reason = "疑似屏幕翻拍"
+        else:
+            passed = (
+                motion_raw >= settings.liveness_motion_threshold
+                and final >= settings.liveness_threshold
+            )
+            if motion_raw < settings.liveness_motion_threshold:
+                reason = "未检测到自然运动，疑似照片/静态画面"
+            elif final < settings.liveness_threshold:
+                reason = "活体综合评分不足"
 
         return {
             "score": float(np.clip(final, 0.0, 1.0)),
@@ -125,7 +129,7 @@ class LivenessDetector:
             "brightness": brightness_norm,
             "brightness_var": brightness_var,
             "frames": len(valid),
-            "moire": float(np.mean([item["moire"] for item in per_frame])),
+            "moire": moire_avg,
         }
 
     # 兼容旧调用（process_attendance 单帧链路）。

@@ -13,7 +13,7 @@ from app.models.entities import (
     Student,
     User,
 )
-from app.schemas.reports import GroupPhotoMatchItem, GroupPhotoResponse
+from app.schemas.reports import GroupPhotoFaceBox, GroupPhotoMatchItem, GroupPhotoResponse
 from app.services.auth import hash_password
 from app.services.emotion import EmotionAnalyzer
 from app.services.face_engine import FaceDetector
@@ -151,8 +151,12 @@ class RecognitionService:
         else:
             single = self.liveness.score_single(last_face)
             liveness_score = single["score"]
-            liveness_passed = liveness_score >= settings.liveness_threshold
-            liveness_reason = "" if liveness_passed else "活体检测未通过"
+            moire_rejected = single.get("moire", 0.0) > 0
+            liveness_passed = (liveness_score >= settings.liveness_threshold) and (not moire_rejected)
+            if moire_rejected:
+                liveness_reason = "摩尔纹分数>0，按策略直接拒绝"
+            else:
+                liveness_reason = "" if liveness_passed else "活体检测未通过"
             liveness = {**single, "passed": liveness_passed, "reason": liveness_reason}
 
         if not liveness_passed:
@@ -222,9 +226,11 @@ class RecognitionService:
         )
 
         matched_items: list[GroupPhotoMatchItem] = []
+        face_boxes: list[GroupPhotoFaceBox] = []
         seen_student_ids: set[int] = set()
 
         for box, _ in detections:
+            x1, y1, x2, y2 = box
             face = crop_face(image_bgr, box)
             emotion, emotion_score = self.emotion.predict(face)
             embedding = self.embedder.extract(face)
@@ -232,7 +238,22 @@ class RecognitionService:
 
             self._save_emotion(db, student.id if student else None, "group_photo", emotion, emotion_score)
 
-            if student is None or confidence < settings.recognition_threshold:
+            matched = student is not None and confidence >= settings.recognition_threshold
+            face_boxes.append(
+                GroupPhotoFaceBox(
+                    x1=int(x1),
+                    y1=int(y1),
+                    x2=int(x2),
+                    y2=int(y2),
+                    confidence=confidence,
+                    matched=matched,
+                    student_no=student.student_no if matched and student else None,
+                    name=student.name if matched and student else None,
+                    class_name=student.class_name if matched and student else None,
+                )
+            )
+
+            if not matched:
                 continue
             if student.id in seen_student_ids:
                 continue
@@ -261,11 +282,15 @@ class RecognitionService:
 
         db.commit()
         elapsed = int((perf_counter() - start) * 1000)
+        matched_face_count = sum(1 for item in face_boxes if item.matched)
         return GroupPhotoResponse(
             event_name=event_name,
             detected_faces=len(detections),
             matched_students=matched_items,
-            unmatched_faces=max(0, len(detections) - len(matched_items)),
+            face_boxes=face_boxes,
+            image_width=int(image_bgr.shape[1]),
+            image_height=int(image_bgr.shape[0]),
+            unmatched_faces=max(0, len(detections) - matched_face_count),
             processing_time_ms=elapsed,
         )
 

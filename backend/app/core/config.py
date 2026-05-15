@@ -13,11 +13,11 @@ class Settings(BaseSettings):
     detection_confidence: float = 0.25
 
     # 合照分块检测参数
-    group_photo_detection_conf: float = 0.30
+    group_photo_detection_conf: float = 0.50
     group_photo_tile_size: int = 640
     group_photo_tile_overlap: float = 0.25
-    group_photo_nms_iou: float = 0.40
-    recognition_threshold: float = 0.42
+    group_photo_nms_iou: float = 0.16
+    recognition_threshold: float = 0.55
     liveness_threshold: float = 0.40
     request_timeout_sec: int = 60
 
